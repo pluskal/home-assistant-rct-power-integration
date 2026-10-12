@@ -13,8 +13,19 @@ class MultiCoordinatorEntity(Entity):
 
     _attr_should_poll = False
 
-    def __init__(self, coordinators: list[RctPowerDataUpdateCoordinator]) -> None:
+    def __init__(
+        self,
+        coordinators: list[RctPowerDataUpdateCoordinator],
+        *,
+        update_coordinators: list[RctPowerDataUpdateCoordinator] | None = None,
+    ) -> None:
+        # every coordinator is consulted for lookups, in the given order (the
+        # device info resolves the static serial numbers); the entity rewrites
+        # its state only when one of the update coordinators ticks
         self.coordinators = coordinators
+        self.update_coordinators = (
+            update_coordinators if update_coordinators is not None else coordinators
+        )
 
     @property
     def available(self) -> bool:
@@ -23,7 +34,7 @@ class MultiCoordinatorEntity(Entity):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
 
-        for coordinator in self.coordinators:
+        for coordinator in self.update_coordinators:
             self.async_on_remove(
                 coordinator.async_add_listener(self._handle_coordinator_update)
             )
@@ -38,5 +49,8 @@ class MultiCoordinatorEntity(Entity):
             return
 
         await gather(
-            *[coordinator.async_request_refresh() for coordinator in self.coordinators]
+            *[
+                coordinator.async_request_refresh()
+                for coordinator in self.update_coordinators
+            ]
         )

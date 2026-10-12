@@ -44,8 +44,10 @@ class RctPowerEntity(MultiCoordinatorEntity):
         coordinators: list[RctPowerDataUpdateCoordinator],
         config_entry: ConfigEntry,
         entity_description: RctPowerEntityDescription,
+        *,
+        update_coordinators: list[RctPowerDataUpdateCoordinator] | None = None,
     ):
-        super().__init__(coordinators)
+        super().__init__(coordinators, update_coordinators=update_coordinators)
         self.config_entry = config_entry
         self.entity_description = (  # pyright: ignore [reportIncompatibleVariableOverride]
             entity_description
