@@ -86,7 +86,9 @@ def test_a_realtime_change_is_applied_in_place() -> None:
     hass.config_entries.async_reload.assert_not_awaited()
     stubs[
         EntityUpdatePriority.REALTIME
-    ].async_set_scan_interval.assert_called_once_with(timedelta(seconds=2))
+    ].async_set_scan_interval.assert_called_once_with(
+        timedelta(seconds=2), timedelta(seconds=12)
+    )
     for priority in (
         EntityUpdatePriority.FREQUENT,
         EntityUpdatePriority.INFREQUENT,
@@ -115,7 +117,9 @@ def test_options_saved_before_the_realtime_tier_existed() -> None:
     hass.config_entries.async_reload.assert_not_awaited()
     stubs[
         EntityUpdatePriority.REALTIME
-    ].async_set_scan_interval.assert_called_once_with(timedelta(seconds=20))
+    ].async_set_scan_interval.assert_called_once_with(
+        timedelta(seconds=20), timedelta(seconds=100)
+    )
 
 
 class LoopStub:
@@ -152,9 +156,10 @@ def test_coordinator_applies_a_new_interval_in_place() -> None:
     loop = LoopStub()
     coordinator = coordinator_on(loop, 20)
 
-    coordinator.async_set_scan_interval(timedelta(seconds=2))
+    coordinator.async_set_scan_interval(timedelta(seconds=2), timedelta(seconds=10))
 
     assert coordinator.update_interval == timedelta(seconds=2)
+    assert coordinator.stale_tolerance == timedelta(seconds=10)
     # the value HA's scheduler reads for the next refresh
     assert coordinator._update_interval_seconds == 2.0
     # no refresh was pending (no listeners), so nothing is scheduled
@@ -169,7 +174,7 @@ def test_a_shorter_interval_moves_the_pending_refresh() -> None:
     assert pending.when == 1000 + coordinator._microsecond + 20
 
     loop.now = 1015.7  # 20 -> 2 s saved 15 s later
-    coordinator.async_set_scan_interval(timedelta(seconds=2))
+    coordinator.async_set_scan_interval(timedelta(seconds=2), None)
 
     pending.cancel.assert_called_once_with()
     assert loop.handles[-1].when == 1015 + coordinator._microsecond + 2
@@ -183,7 +188,7 @@ def test_a_longer_interval_keeps_the_pending_refresh() -> None:
     (pending,) = loop.handles
 
     loop.now = 1001.0  # the abort: 2 -> 30 s
-    coordinator.async_set_scan_interval(timedelta(seconds=30))
+    coordinator.async_set_scan_interval(timedelta(seconds=30), None)
 
     pending.cancel.assert_not_called()
     assert loop.handles == [pending]
@@ -224,6 +229,10 @@ def test_setup_creates_the_realtime_tier() -> None:
 
     realtime = created["realtime"].kwargs
     assert realtime["update_interval"] == timedelta(seconds=20)
+    # five intervals of realtime values may be reused after failed reads
+    assert realtime["stale_tolerance"] == timedelta(seconds=100)
+    for suffix in ("frequent", "infrequent", "static"):
+        assert "stale_tolerance" not in created[suffix].kwargs
     assert sorted(realtime["object_ids"]) == sorted(
         oid(f"g_sync.p_ac_sc[{phase}]") for phase in range(3)
     )
@@ -242,4 +251,12 @@ def test_setup_uses_the_saved_realtime_interval() -> None:
     created, _, _ = set_up_with({"realtime_scan_interval": 2})
 
     assert created["realtime"].kwargs["update_interval"] == timedelta(seconds=2)
+    assert created["realtime"].kwargs["stale_tolerance"] == timedelta(seconds=12)
     assert created["frequent"].kwargs["update_interval"] == timedelta(seconds=30)
+
+
+def test_the_realtime_tolerance_is_five_intervals_but_at_least_twelve_seconds() -> None:
+    assert [
+        rct_power.realtime_stale_tolerance(seconds).total_seconds()
+        for seconds in (1, 2, 3, 5, 20, 30)
+    ] == [12, 12, 15, 25, 100, 150]

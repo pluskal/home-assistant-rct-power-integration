@@ -16,7 +16,13 @@ from homeassistant.const import CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.util.hass_dict import HassEntryKey
 
-from .const import CONF_HOSTNAME, ConfScanInterval, ScanIntervalDefault
+from .const import (
+    CONF_HOSTNAME,
+    REALTIME_STALE_TOLERANCE_INTERVALS,
+    REALTIME_STALE_TOLERANCE_MIN,
+    ConfScanInterval,
+    ScanIntervalDefault,
+)
 from .coordinator import RctPowerDataUpdateCoordinator
 from .lib.api import RctPowerApiClient
 from .lib.const import DOMAIN, PLATFORMS, EntityUpdatePriority
@@ -52,13 +58,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: RctConfigEntry) -> bool:
             for object_info in resolve_object_infos(entity_description)
         }
     )
+    realtime_scan_interval = options.get(
+        ConfScanInterval.REALTIME, ScanIntervalDefault.REALTIME
+    )
     realtime_update_coordinator = RctPowerDataUpdateCoordinator(
         hass=hass,
         entry=entry,
         name_suffix="realtime",
-        update_interval=timedelta(
-            seconds=options.get(ConfScanInterval.REALTIME, ScanIntervalDefault.REALTIME)
-        ),
+        update_interval=timedelta(seconds=realtime_scan_interval),
+        stale_tolerance=realtime_stale_tolerance(realtime_scan_interval),
         object_ids=realtime_object_ids,
         client=client,
     )
@@ -123,7 +131,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: RctConfigEntry) -> bool:
     )
 
     # the frequent tier goes first so that an unreachable inverter fails the
-    # setup after a single connection timeout
+    # setup after a single connection timeout (the realtime refresh never
+    # raises)
     await frequent_update_coordinator.async_config_entry_first_refresh()
     await realtime_update_coordinator.async_config_entry_first_refresh()
     await infrequent_update_coordinator.async_config_entry_first_refresh()
@@ -152,6 +161,16 @@ async def async_unload_entry(hass: HomeAssistant, entry: RctConfigEntry) -> bool
 async def async_reload_entry(hass: HomeAssistant, entry: RctConfigEntry) -> None:
     """Reload config entry."""
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+def realtime_stale_tolerance(scan_interval: int) -> timedelta:
+    """How long a realtime value may be reused after failed reads."""
+    return timedelta(
+        seconds=max(
+            REALTIME_STALE_TOLERANCE_INTERVALS * scan_interval,
+            REALTIME_STALE_TOLERANCE_MIN,
+        )
+    )
 
 
 async def async_update_entry_options(
@@ -189,8 +208,10 @@ async def async_update_entry_options(
             await async_reload_entry(hass, entry)
             return
 
+    realtime_scan_interval = options.get(
+        ConfScanInterval.REALTIME, ScanIntervalDefault.REALTIME
+    )
     coordinators[EntityUpdatePriority.REALTIME].async_set_scan_interval(
-        timedelta(
-            seconds=options.get(ConfScanInterval.REALTIME, ScanIntervalDefault.REALTIME)
-        )
+        timedelta(seconds=realtime_scan_interval),
+        realtime_stale_tolerance(realtime_scan_interval),
     )

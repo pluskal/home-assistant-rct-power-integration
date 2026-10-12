@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import struct
+import time
 from asyncio import StreamReader, StreamWriter, open_connection
 from asyncio.locks import Lock
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -53,6 +55,24 @@ type ApiResponse = ValidApiResponse | InvalidApiResponse
 type RctPowerData = dict[int, ApiResponse]
 
 
+class ApiResponseBatch(dict[int, ApiResponse]):
+    """The responses of one connection and when reading them started.
+
+    `read_started` is a time.monotonic() value taken right after the connection
+    lock was acquired: waiting for another batch is not part of the age of
+    these responses, connecting and the per-object timeouts are.
+    """
+
+    def __init__(
+        self,
+        responses: Mapping[int, ApiResponse] | None = None,
+        *,
+        read_started: float,
+    ) -> None:
+        super().__init__(responses or {})
+        self.read_started = read_started
+
+
 def get_valid_response_value_or[_R](
     response: ApiResponse | None, defaultValue: _R
 ) -> ApiResponseValue | _R:
@@ -84,8 +104,10 @@ class RctPowerApiClient:
         else:
             return None
 
-    async def async_get_data(self, object_ids: list[int]) -> RctPowerData:
+    async def async_get_data(self, object_ids: list[int]) -> ApiResponseBatch:
         async with self._connection_lock:
+            read_started = time.monotonic()
+
             async with asyncio.timeout(CONNECTION_TIMEOUT):
                 reader, writer = await open_connection(
                     host=self._hostname, port=self._port
@@ -95,12 +117,15 @@ class RctPowerApiClient:
                     if reader.at_eof():
                         raise UpdateFailed("Read stream closed")
 
-                    return {
-                        object_id: await self._read_object(
-                            reader=reader, writer=writer, object_id=object_id
-                        )
-                        for object_id in object_ids
-                    }
+                    return ApiResponseBatch(
+                        {
+                            object_id: await self._read_object(
+                                reader=reader, writer=writer, object_id=object_id
+                            )
+                            for object_id in object_ids
+                        },
+                        read_started=read_started,
+                    )
                 finally:
                     writer.close()
 

@@ -28,6 +28,14 @@ This fork is based on the `v0.14.2` release and adds:
   at least `1`) and three entities `Grid Power P1/P2/P3 Realtime` that read the
   grid phase powers (`g_sync.p_ac_sc[0..2]`) on that tier. The existing
   `Grid Power P1/P2/P3` entities stay on the frequent tier, unchanged.
+- Bounded staleness on the realtime tier: a failed read reuses the previous
+  value for up to five intervals, but at least 12 seconds, measured on the
+  monotonic clock from when the read that produced it actually started on the
+  bus (after waiting for another tier's read, including the connect); after
+  that the realtime entities become unavailable until a read succeeds, even
+  while a read is blocked. A read that itself took that long is shown as
+  unavailable right away. Failures of this tier are logged at debug level. The
+  other tiers keep the upstream behaviour (the last values stay available).
 - Each entity rewrites its state only when its own tier is refreshed; lookups
   still consult every tier (own tier first), so the device information is
   unchanged. The infrequent and static entities therefore report their state

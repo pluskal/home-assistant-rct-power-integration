@@ -28,3 +28,12 @@ class ScanIntervalDefault(IntEnum):
     FREQUENT = 30
     INFREQUENT = 60 * 3
     STATIC = 60 * 60
+
+
+# a realtime value may be reused for this many intervals after a failed read,
+# but at least REALTIME_STALE_TOLERANCE_MIN seconds: two realtime reads can be
+# several seconds further apart than the interval while a healthy batch of
+# another tier holds the connection (measured up to 8 s); after that the
+# realtime entities become unavailable until a read succeeds
+REALTIME_STALE_TOLERANCE_INTERVALS: Final = 5
+REALTIME_STALE_TOLERANCE_MIN: Final = 12
