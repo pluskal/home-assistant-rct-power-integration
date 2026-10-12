@@ -485,6 +485,33 @@ inverter_sensor_entity_descriptions: list[RctPowerSensorEntityDescription] = [
         name="Grid Power P3",
         state_class=SensorStateClass.MEASUREMENT,
     ),
+    # the grid phases once more on the realtime tier; the frequent entities
+    # above keep their ids and history, so the realtime ones need explicit
+    # unique ids
+    RctPowerSensorEntityDescription(
+        get_device_info=get_inverter_device_info,
+        key="g_sync.p_ac_sc[0]",
+        name="Grid Power P1 Realtime",
+        unique_id="realtime-g_sync.p_ac_sc[0]",
+        state_class=SensorStateClass.MEASUREMENT,
+        update_priority=EntityUpdatePriority.REALTIME,
+    ),
+    RctPowerSensorEntityDescription(
+        get_device_info=get_inverter_device_info,
+        key="g_sync.p_ac_sc[1]",
+        name="Grid Power P2 Realtime",
+        unique_id="realtime-g_sync.p_ac_sc[1]",
+        state_class=SensorStateClass.MEASUREMENT,
+        update_priority=EntityUpdatePriority.REALTIME,
+    ),
+    RctPowerSensorEntityDescription(
+        get_device_info=get_inverter_device_info,
+        key="g_sync.p_ac_sc[2]",
+        name="Grid Power P3 Realtime",
+        unique_id="realtime-g_sync.p_ac_sc[2]",
+        state_class=SensorStateClass.MEASUREMENT,
+        update_priority=EntityUpdatePriority.REALTIME,
+    ),
     RctPowerSensorEntityDescription(
         get_device_info=get_inverter_device_info,
         key="grid_pll[0].f",

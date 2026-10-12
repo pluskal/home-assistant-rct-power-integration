@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import LOGGER
@@ -58,6 +58,25 @@ class RctPowerDataUpdateCoordinator(DataUpdateCoordinator[RctPowerData]):
 
     def has_valid_value(self, object_id: int) -> bool:
         return isinstance(self.get_latest_response(object_id), ValidApiResponse)
+
+    @callback
+    def async_set_scan_interval(self, update_interval: timedelta) -> None:
+        """Apply a changed interval in place (no entry reload).
+
+        A shorter interval moves a pending refresh to the new interval from
+        now, so the first read at the new rate does not wait for the old
+        schedule; otherwise the new interval is used when the next refresh is
+        scheduled, i.e. once the running or pending refresh has finished.
+        """
+        previous_interval = self.update_interval
+        self.update_interval = update_interval
+
+        if (
+            previous_interval is not None
+            and update_interval < previous_interval
+            and self._unsub_refresh is not None
+        ):
+            self._schedule_refresh()
 
     async def _async_update_data(self) -> RctPowerData:
         return await self.client.async_get_data(object_ids=self.object_ids)

@@ -15,12 +15,16 @@ DEFAULT_PORT: Final = 8899
 
 
 class ConfScanInterval(StrEnum):
+    REALTIME = "realtime_scan_interval"
     FREQUENT = "frequent_scan_interval"
     INFREQUENT = "infrequent_scan_interval"
     STATIC = "static_scan_interval"
 
 
 class ScanIntervalDefault(IntEnum):
+    # 20 s is safe for the inverter's network module even in a pessimistic
+    # socket model; lower it in the options dialog once the link is proven
+    REALTIME = 20
     FREQUENT = 30
     INFREQUENT = 60 * 3
     STATIC = 60 * 60

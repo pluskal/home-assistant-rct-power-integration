@@ -191,3 +191,41 @@ def test_an_invalid_own_response_is_not_masked_by_another_tier() -> None:
 
     assert entity.available is False
     assert entity.get_valid_api_response_value_by_id(oid(key)) is None
+
+
+def test_grid_phases_resolve_per_tier() -> None:
+    """The phases are read by two tiers; each entity shows its own tier."""
+    stubs = make_stubs()
+    realtime = stubs[EntityUpdatePriority.REALTIME]
+    frequent = stubs[EntityUpdatePriority.FREQUENT]
+    for phase in range(3):
+        key = f"g_sync.p_ac_sc[{phase}]"
+        realtime.data[oid(key)] = valid(key, 1000.0 + phase)
+        frequent.data[oid(key)] = valid(key, 2000.0 + phase)
+    entities = set_up_entities(stubs)
+
+    for phase in range(3):
+        key = f"g_sync.p_ac_sc[{phase}]"
+        realtime_entity = entity_by_key(entities, key, EntityUpdatePriority.REALTIME)
+        frequent_entity = entity_by_key(entities, key, EntityUpdatePriority.FREQUENT)
+        assert realtime_entity.native_value == 1000.0 + phase
+        assert frequent_entity.native_value == 2000.0 + phase
+        assert (
+            realtime_entity.name
+            == f"RCT Power Storage Grid Power P{phase + 1} Realtime"
+        )
+        assert realtime_entity.unique_id == f"entry-id-realtime-g_sync.p_ac_sc[{phase}]"
+        assert realtime_entity.device_info == frequent_entity.device_info
+
+
+def test_an_invalid_realtime_phase_is_not_masked_by_the_frequent_tier() -> None:
+    stubs = make_stubs()
+    key = "g_sync.p_ac_sc[1]"
+    stubs[EntityUpdatePriority.REALTIME].data[oid(key)] = invalid(key, "STALE")
+    stubs[EntityUpdatePriority.FREQUENT].data[oid(key)] = valid(key, 2001.0)
+    entities = set_up_entities(stubs)
+
+    assert (
+        entity_by_key(entities, key, EntityUpdatePriority.REALTIME).available is False
+    )
+    assert entity_by_key(entities, key, EntityUpdatePriority.FREQUENT).available is True

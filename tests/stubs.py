@@ -80,4 +80,5 @@ def make_entry(
     }
     entry.options = dict(options or {})
     entry.runtime_data = runtime_data
+    entry.pref_disable_polling = False
     return entry

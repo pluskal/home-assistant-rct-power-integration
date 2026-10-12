@@ -20,6 +20,23 @@
 | -------- | ----------------------------- |
 | `sensor` | Show info from RCT Power API. |
 
+## Fork changes
+
+This fork is based on the `v0.14.2` release and adds:
+
+- A realtime update tier with its own polling interval (default `20` seconds,
+  at least `1`) and three entities `Grid Power P1/P2/P3 Realtime` that read the
+  grid phase powers (`g_sync.p_ac_sc[0..2]`) on that tier. The existing
+  `Grid Power P1/P2/P3` entities stay on the frequent tier, unchanged.
+- Each entity rewrites its state only when its own tier is refreshed; lookups
+  still consult every tier (own tier first), so the device information is
+  unchanged. The infrequent and static entities therefore report their state
+  only on their own tier's tick, not on every frequent tick (fewer
+  `last_reported` updates; an unchanged state writes no recorder rows either
+  way).
+- All polling intervals must be at least one second (`0` used to be accepted
+  and meant continuous polling).
+
 ## Installation
 
 ### Via the HACS integration
@@ -47,6 +64,7 @@ Upon installation the integration accepts the following configuration parameters
 
 After installation the integration allows for the following configuration parameters to be changed:
 
+- `Realtime polling interval`: The polling interval in seconds for entities updated in realtime (the grid phase powers), defaults to `20`. Lower it once the inverter's network module has been proven to cope with the rate; a change of this interval is applied without reloading the integration (a shorter interval takes effect at once, a longer one after the pending refresh). As with upstream, options saved while the integration is being set up or reloaded may only take effect at the next reload.
 - `Frequent polling interval`: The polling interval in seconds for entities updated frequently, defaults to `30`.
 - `Infrequent polling interval`: The polling interval in seconds for entities updated infrequently, defaults to `180`.
 - `Static polling interval`: The polling interval in seconds for entities updated seldomly, defaults to `3600`.

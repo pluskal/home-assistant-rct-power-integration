@@ -21,8 +21,10 @@
     "step": {
       "user": {
         "data": {
-          "objects": "Enabled objects",
-          "scan_interval": "Polling interval"
+          "realtime_scan_interval": "Realtime polling interval (s)",
+          "frequent_scan_interval": "Frequent polling interval (s)",
+          "infrequent_scan_interval": "Infrequent polling interval (s)",
+          "static_scan_interval": "Static polling interval (s)"
         }
       }
     }

@@ -33,6 +33,7 @@ FREQUENCY_STATE_DECIMAL_DIGITS = 3
 
 
 class EntityUpdatePriority(Enum):
+    REALTIME = auto()
     FREQUENT = auto()
     INFREQUENT = auto()
     STATIC = auto()

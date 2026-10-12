@@ -44,6 +44,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: RctConfigEntry) -> bool:
         port=data[CONF_PORT],
     )
 
+    realtime_object_ids = list(
+        {
+            object_info.object_id
+            for entity_description in all_entity_descriptions
+            if entity_description.update_priority == EntityUpdatePriority.REALTIME
+            for object_info in resolve_object_infos(entity_description)
+        }
+    )
+    realtime_update_coordinator = RctPowerDataUpdateCoordinator(
+        hass=hass,
+        entry=entry,
+        name_suffix="realtime",
+        update_interval=timedelta(
+            seconds=options.get(ConfScanInterval.REALTIME, ScanIntervalDefault.REALTIME)
+        ),
+        object_ids=realtime_object_ids,
+        client=client,
+    )
+
     frequently_updated_object_ids = list(
         {
             object_info.object_id
@@ -103,19 +122,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: RctConfigEntry) -> bool:
         client=client,
     )
 
+    # the frequent tier goes first so that an unreachable inverter fails the
+    # setup after a single connection timeout
     await frequent_update_coordinator.async_config_entry_first_refresh()
+    await realtime_update_coordinator.async_config_entry_first_refresh()
     await infrequent_update_coordinator.async_config_entry_first_refresh()
     await static_update_coordinator.async_config_entry_first_refresh()
 
     entry.runtime_data = RctData(
         {
+            EntityUpdatePriority.REALTIME: realtime_update_coordinator,
             EntityUpdatePriority.FREQUENT: frequent_update_coordinator,
             EntityUpdatePriority.INFREQUENT: infrequent_update_coordinator,
             EntityUpdatePriority.STATIC: static_update_coordinator,
         }
     )
 
-    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+    entry.async_on_unload(entry.add_update_listener(async_update_entry_options))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
@@ -129,3 +152,45 @@ async def async_unload_entry(hass: HomeAssistant, entry: RctConfigEntry) -> bool
 async def async_reload_entry(hass: HomeAssistant, entry: RctConfigEntry) -> None:
     """Reload config entry."""
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def async_update_entry_options(
+    hass: HomeAssistant, entry: RctConfigEntry
+) -> None:
+    """Apply changed options.
+
+    The realtime interval is applied in place, so changing it never makes the
+    other entities unavailable; a change of any other interval reloads the
+    entry as before.
+    """
+    options = cast(RctConfEntryOptions, entry.options)
+    coordinators = entry.runtime_data.update_coordinators
+
+    for priority, key, default in (
+        (
+            EntityUpdatePriority.FREQUENT,
+            ConfScanInterval.FREQUENT,
+            ScanIntervalDefault.FREQUENT,
+        ),
+        (
+            EntityUpdatePriority.INFREQUENT,
+            ConfScanInterval.INFREQUENT,
+            ScanIntervalDefault.INFREQUENT,
+        ),
+        (
+            EntityUpdatePriority.STATIC,
+            ConfScanInterval.STATIC,
+            ScanIntervalDefault.STATIC,
+        ),
+    ):
+        if coordinators[priority].update_interval != timedelta(
+            seconds=options.get(key, default)
+        ):
+            await async_reload_entry(hass, entry)
+            return
+
+    coordinators[EntityUpdatePriority.REALTIME].async_set_scan_interval(
+        timedelta(
+            seconds=options.get(ConfScanInterval.REALTIME, ScanIntervalDefault.REALTIME)
+        )
+    )

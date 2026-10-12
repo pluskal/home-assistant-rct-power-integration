@@ -102,16 +102,23 @@ CONFIG_FLOW_SCHEMA = vol.Schema(
 )
 
 
+# cv.positive_int accepts 0, and an interval of 0 s would poll the inverter
+# continuously
+SCAN_INTERVAL_SCHEMA = vol.All(cv.positive_int, vol.Range(min=1))
+
 OPTIONS_SCHEMA = vol.Schema(
     {
         vol.Optional(
+            ConfScanInterval.REALTIME.value, default=ScanIntervalDefault.REALTIME
+        ): SCAN_INTERVAL_SCHEMA,
+        vol.Optional(
             ConfScanInterval.FREQUENT.value, default=ScanIntervalDefault.FREQUENT
-        ): cv.positive_int,
+        ): SCAN_INTERVAL_SCHEMA,
         vol.Optional(
             ConfScanInterval.INFREQUENT.value, default=ScanIntervalDefault.INFREQUENT
-        ): cv.positive_int,
+        ): SCAN_INTERVAL_SCHEMA,
         vol.Optional(
             ConfScanInterval.STATIC.value, default=ScanIntervalDefault.STATIC
-        ): cv.positive_int,
+        ): SCAN_INTERVAL_SCHEMA,
     }
 )

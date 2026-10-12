@@ -9,6 +9,7 @@ class RctConfEntryData(TypedDict):
 
 
 class RctConfEntryOptions(TypedDict, total=False):
+    realtime_scan_interval: int
     frequent_scan_interval: int
     infrequent_scan_interval: int
     static_scan_interval: int
